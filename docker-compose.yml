@@ -1,0 +1,21 @@
+version: '3.8'
+
+services:
+  udp-logger:
+    build: .
+    container_name: smart-udp-log-viewer
+    ports:
+      - "5140:5140/udp"
+      - "8080:8080"
+    volumes:
+      - ./logs:/logs
+      - ./config.json:/app/config.json:ro
+    restart: unless-stopped
+    environment:
+      - TZ=UTC
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8080/logs?limit=1')"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 10s

@@ -6,7 +6,7 @@ services:
       - "5140:5140/udp"
       - "8080:8080"
     volumes:
-      - ./logs:/logs
+      - ./logs:/app/logs
       - ./config.json:/app/config.json:ro
     restart: unless-stopped
     environment:

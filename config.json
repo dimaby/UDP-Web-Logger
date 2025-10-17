@@ -1,0 +1,11 @@
+{
+  "udp_port": 5140,
+  "web_port": 8080,
+  "max_memory_logs": 10000,
+  "log_dir": "./logs",
+  "keep_days": 3,
+  "allowed_origins": ["*"],
+  "write_to_file": true,
+  "udp_whitelist": [],
+  "websocket_token": null
+}

@@ -47,7 +47,7 @@ class LogStorage:
         
         # Send to Telegram if enabled
         if self._telegram_notifier:
-            timestamp_str = entry.timestamp.strftime("%d.%m.%Y %H:%M:%S")
+            timestamp_str = entry.timestamp.strftime("%d/%m %H:%M:%S")
             telegram_message = f"<code>[{timestamp_str}]</code> {entry.message}"
             await self._telegram_notifier.send_message(telegram_message)
         

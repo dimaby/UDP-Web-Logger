@@ -1,0 +1,357 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Smart UDP Log Viewer</title>
+    <style>
+        :root {
+            color-scheme: dark;
+            font-family: "Inter", "Segoe UI", Roboto, sans-serif;
+            background-color: #0f172a;
+            color: #e2e8f0;
+        }
+        body {
+            margin: 0;
+            display: flex;
+            flex-direction: column;
+            height: 100vh;
+            background: radial-gradient(circle at top left, #1e293b, #0f172a);
+        }
+        header {
+            padding: 12px 16px;
+            display: flex;
+            gap: 12px;
+            align-items: center;
+            flex-wrap: wrap;
+            background-color: rgba(15, 23, 42, 0.85);
+            backdrop-filter: blur(8px);
+            border-bottom: 1px solid rgba(148, 163, 184, 0.2);
+            position: sticky;
+            top: 0;
+            z-index: 10;
+        }
+        header label {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            font-size: 0.9rem;
+        }
+        input[type="text"] {
+            padding: 8px 10px;
+            border-radius: 6px;
+            border: 1px solid rgba(148, 163, 184, 0.2);
+            background-color: rgba(15, 23, 42, 0.9);
+            color: inherit;
+            min-width: 180px;
+        }
+        input[type="text"]:focus {
+            outline: 2px solid rgba(94, 234, 212, 0.6);
+            border-color: rgba(94, 234, 212, 0.6);
+        }
+        button, .toggle {
+            padding: 8px 12px;
+            border-radius: 6px;
+            border: 1px solid rgba(148, 163, 184, 0.3);
+            background: rgba(30, 41, 59, 0.8);
+            color: inherit;
+            font-weight: 500;
+            cursor: pointer;
+            transition: background 0.2s, border-color 0.2s;
+        }
+        button:hover, .toggle:hover {
+            background: rgba(59, 130, 246, 0.2);
+            border-color: rgba(59, 130, 246, 0.4);
+        }
+        button:disabled {
+            opacity: 0.6;
+            cursor: not-allowed;
+        }
+        main {
+            flex: 1;
+            overflow: hidden;
+            display: flex;
+            flex-direction: column;
+            padding: 0 8px 8px 8px;
+        }
+        #logContainer {
+            flex: 1;
+            overflow: auto;
+            background: rgba(15, 23, 42, 0.8);
+            border-radius: 10px;
+            border: 1px solid rgba(148, 163, 184, 0.2);
+            padding: 12px;
+            margin-top: 8px;
+        }
+        .log-line {
+            font-family: "JetBrains Mono", "Fira Code", monospace;
+            margin: 0;
+            padding: 4px 6px;
+            border-bottom: 1px solid rgba(148, 163, 184, 0.08);
+            white-space: pre-wrap;
+            word-break: break-word;
+        }
+        .log-line:last-child {
+            border-bottom: none;
+        }
+        footer {
+            padding: 8px 16px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            gap: 12px;
+            background-color: rgba(15, 23, 42, 0.85);
+            border-top: 1px solid rgba(148, 163, 184, 0.2);
+        }
+        .status {
+            font-size: 0.85rem;
+            opacity: 0.85;
+        }
+        .pill {
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            padding: 6px 10px;
+            border-radius: 999px;
+            background: rgba(59, 130, 246, 0.15);
+            border: 1px solid rgba(59, 130, 246, 0.3);
+        }
+        .pill.paused {
+            background: rgba(244, 114, 182, 0.2);
+            border-color: rgba(244, 114, 182, 0.4);
+        }
+        .pill.live {
+            background: rgba(74, 222, 128, 0.15);
+            border-color: rgba(74, 222, 128, 0.3);
+        }
+        .nowrap {
+            white-space: nowrap;
+        }
+    </style>
+</head>
+<body>
+    <header>
+        <label>🔍 Search: <input type="text" id="searchInput" placeholder="Filter logs" /></label>
+        <button id="pauseBtn">⏸ Pause</button>
+        <button id="resumeBtn" disabled>▶ Resume</button>
+        <button id="clearBtn">🧹 Clear</button>
+        <button id="downloadBtn">⬇ Save log</button>
+        <button id="autoScrollBtn" class="toggle">👁 Auto-scroll: ON</button>
+        <span class="pill live" id="liveStatus">LIVE</span>
+    </header>
+    <main>
+        <div id="logContainer">
+            <div id="logList"></div>
+        </div>
+    </main>
+    <footer>
+        <span class="status" id="connectionStatus">Connecting…</span>
+        <span class="status nowrap" id="logCount">0 entries</span>
+    </footer>
+    <script>
+        const logContainer = document.getElementById('logContainer');
+        const logList = document.getElementById('logList');
+        const pauseBtn = document.getElementById('pauseBtn');
+        const resumeBtn = document.getElementById('resumeBtn');
+        const clearBtn = document.getElementById('clearBtn');
+        const downloadBtn = document.getElementById('downloadBtn');
+        const autoScrollBtn = document.getElementById('autoScrollBtn');
+        const liveStatus = document.getElementById('liveStatus');
+        const connectionStatus = document.getElementById('connectionStatus');
+        const logCount = document.getElementById('logCount');
+        const searchInput = document.getElementById('searchInput');
+
+        const MAX_LOGS = 10000;
+        let logs = [];
+        let paused = false;
+        let autoScroll = true;
+        let reconnectDelay = 1000;
+
+        async function bootstrap() {
+            await loadInitialLogs();
+            setupControls();
+            connectWebSocket();
+        }
+
+        function getAuthToken() {
+            try {
+                const params = new URLSearchParams(window.location.search);
+                const tokenFromUrl = params.get('token');
+                if (tokenFromUrl) {
+                    localStorage.setItem('smartlog_token', tokenFromUrl);
+                    return tokenFromUrl;
+                }
+                return localStorage.getItem('smartlog_token');
+            } catch (error) {
+                return null;
+            }
+        }
+
+        async function loadInitialLogs() {
+            try {
+                const response = await fetch('/logs?limit=500');
+                if (!response.ok) throw new Error('Failed to fetch logs');
+                const data = await response.json();
+                logs = (data.logs || []).slice(-MAX_LOGS);
+                renderLogs();
+            } catch (error) {
+                console.error('Error loading logs', error);
+                connectionStatus.textContent = 'Failed to load initial logs';
+            }
+        }
+
+        function setupControls() {
+            pauseBtn.addEventListener('click', () => {
+                paused = true;
+                pauseBtn.disabled = true;
+                resumeBtn.disabled = false;
+                liveStatus.textContent = 'PAUSED';
+                liveStatus.classList.remove('live');
+                liveStatus.classList.add('paused');
+            });
+
+            resumeBtn.addEventListener('click', () => {
+                paused = false;
+                pauseBtn.disabled = false;
+                resumeBtn.disabled = true;
+                liveStatus.textContent = 'LIVE';
+                liveStatus.classList.add('live');
+                liveStatus.classList.remove('paused');
+                renderLogs();
+            });
+
+            clearBtn.addEventListener('click', () => {
+                logs = [];
+                renderLogs();
+            });
+
+            downloadBtn.addEventListener('click', () => {
+                const text = logs.map(entry => `[${entry.timestamp}] ${entry.message}`).join('\n');
+                const blob = new Blob([text], { type: 'text/plain' });
+                const url = URL.createObjectURL(blob);
+                const link = document.createElement('a');
+                const now = new Date().toISOString().replace(/[:.]/g, '-');
+                link.href = url;
+                link.download = `udp-log-${now}.txt`;
+                document.body.appendChild(link);
+                link.click();
+                document.body.removeChild(link);
+                URL.revokeObjectURL(url);
+            });
+
+            autoScrollBtn.addEventListener('click', () => {
+                autoScroll = !autoScroll;
+                autoScrollBtn.textContent = `👁 Auto-scroll: ${autoScroll ? 'ON' : 'OFF'}`;
+            });
+
+            searchInput.addEventListener('input', () => {
+                renderLogs();
+            });
+        }
+
+        function connectWebSocket() {
+            const protocol = window.location.protocol === 'https:' ? 'wss' : 'ws';
+            const token = getAuthToken();
+            const query = token ? `?token=${encodeURIComponent(token)}` : '';
+            const url = `${protocol}://${window.location.host}/ws${query}`;
+            const socket = new WebSocket(url);
+
+            socket.addEventListener('open', () => {
+                connectionStatus.textContent = 'Connected';
+                reconnectDelay = 1000;
+            });
+
+            socket.addEventListener('message', (event) => {
+                const payload = JSON.parse(event.data);
+                pushLog(payload);
+                if (!paused) {
+                    appendLog(payload);
+                }
+                updateLogCount();
+            });
+
+            socket.addEventListener('close', (event) => {
+                if (event.code === 4401) {
+                    connectionStatus.textContent = 'Unauthorized – check token';
+                    return;
+                }
+                connectionStatus.textContent = 'Disconnected – reconnecting…';
+                setTimeout(connectWebSocket, reconnectDelay);
+                reconnectDelay = Math.min(reconnectDelay * 2, 10000);
+            });
+
+            socket.addEventListener('error', () => {
+                connectionStatus.textContent = 'WebSocket error';
+                socket.close();
+            });
+        }
+
+        function pushLog(entry) {
+            logs.push(entry);
+            if (logs.length > MAX_LOGS) {
+                logs.shift();
+                if (!paused && !searchInput.value.trim() && logList.firstChild) {
+                    logList.removeChild(logList.firstChild);
+                }
+            }
+        }
+
+        function appendLog(entry) {
+            const filter = searchInput.value.trim().toLowerCase();
+            if (filter && !entry.message.toLowerCase().includes(filter)) {
+                return;
+            }
+            const line = document.createElement('div');
+            line.className = 'log-line';
+            line.textContent = `[${formatTime(entry.timestamp)}] ${entry.message}`;
+            logList.appendChild(line);
+            updateScroll();
+        }
+
+        function renderLogs() {
+            logList.innerHTML = '';
+            const filter = searchInput.value.trim().toLowerCase();
+            const filtered = filter
+                ? logs.filter(entry => entry.message.toLowerCase().includes(filter))
+                : logs;
+            for (const entry of filtered) {
+                const line = document.createElement('div');
+                line.className = 'log-line';
+                line.textContent = `[${formatTime(entry.timestamp)}] ${entry.message}`;
+                logList.appendChild(line);
+            }
+            updateLogCount(filtered.length);
+            updateScroll();
+        }
+
+        function updateLogCount(count) {
+            const filter = searchInput.value.trim().toLowerCase();
+            let value = count;
+            if (value === undefined) {
+                if (filter) {
+                    value = logs.filter(entry => entry.message.toLowerCase().includes(filter)).length;
+                } else {
+                    value = logs.length;
+                }
+            }
+            logCount.textContent = `${value} entr${value === 1 ? 'y' : 'ies'}`;
+        }
+
+        function updateScroll() {
+            if (autoScroll) {
+                logContainer.scrollTop = logContainer.scrollHeight;
+            }
+        }
+
+        function formatTime(timestamp) {
+            try {
+                return new Date(timestamp).toLocaleTimeString();
+            } catch (e) {
+                return timestamp;
+            }
+        }
+
+        bootstrap();
+    </script>
+</body>
+</html>

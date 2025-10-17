@@ -66,6 +66,10 @@ class LogStorage:
             items = list(self._buffer)[-limit:]
         return [item.to_dict() for item in items]
 
+    async def clear_buffer(self) -> None:
+        async with self._lock:
+            self._buffer.clear()
+
     def _write_to_file(self, entry: LogEntry) -> None:
         log_path = self._get_log_file_path(entry.timestamp)
         if self._current_log_file != log_path:

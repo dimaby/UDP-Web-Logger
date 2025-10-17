@@ -73,6 +73,12 @@ async def read_logs(limit: int = Query(500, ge=1, le=5000), storage: LogStorage 
     return JSONResponse(content={"logs": logs})
 
 
+@app.delete("/logs")
+async def clear_logs(storage: LogStorage = Depends(get_storage)) -> JSONResponse:
+    await storage.clear_buffer()
+    return JSONResponse(content={"status": "ok", "message": "Buffer cleared"})
+
+
 @app.websocket("/ws")
 async def websocket_logs(
     websocket: WebSocket, config: AppConfig = Depends(get_config_dependency), storage: LogStorage = Depends(get_storage)

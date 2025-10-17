@@ -220,7 +220,17 @@
                 renderLogs();
             });
 
-            clearBtn.addEventListener('click', () => {
+            clearBtn.addEventListener('click', async () => {
+                try {
+                    // Clear server buffer
+                    const response = await fetch('/logs', { method: 'DELETE' });
+                    if (!response.ok) {
+                        console.error('Failed to clear server buffer');
+                    }
+                } catch (error) {
+                    console.error('Error clearing server buffer', error);
+                }
+                // Clear local logs
                 logs = [];
                 renderLogs();
             });

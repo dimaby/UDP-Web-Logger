@@ -7,6 +7,7 @@ from typing import AsyncIterator
 from fastapi import Depends, FastAPI, Query, WebSocket, WebSocketDisconnect
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, JSONResponse
+from fastapi.staticfiles import StaticFiles
 
 from .config import AppConfig, get_config
 from .log_storage import LogStorage
@@ -58,6 +59,9 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+# Mount static files
+app.mount("/static", StaticFiles(directory="app/static"), name="static")
 
 
 async def _cleanup_worker(storage: LogStorage, keep_days: int) -> None:

@@ -17,6 +17,9 @@ class AppConfig:
     write_to_file: bool = True
     udp_whitelist: List[str] = field(default_factory=list)
     websocket_token: Optional[str] = None
+    telegram_enabled: bool = False
+    telegram_bot_token: Optional[str] = None
+    telegram_chat_id: Optional[str] = None
 
     @staticmethod
     def load(path: Path | str) -> "AppConfig":

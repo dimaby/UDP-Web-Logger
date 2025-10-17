@@ -7,5 +7,8 @@
   "allowed_origins": ["*"],
   "write_to_file": true,
   "udp_whitelist": [],
-  "websocket_token": null
+  "websocket_token": null,
+  "telegram_enabled": false,
+  "telegram_bot_token": null,
+  "telegram_chat_id": null
 }

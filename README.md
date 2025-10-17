@@ -10,6 +10,7 @@ A lightweight FastAPI-based service that listens for UDP log messages and stream
 - FastAPI HTTP API for retrieving recent logs
 - WebSocket streaming endpoint for live updates
 - Responsive, zero-dependency web UI with pause/resume, search, auto-scroll, clear, and download controls
+- **Telegram notifications** - Real-time log forwarding to Telegram chat
 
 ## Configuration
 
@@ -25,13 +26,19 @@ Configuration is provided through `config.json` (defaults shown below):
   "allowed_origins": ["*"],
   "write_to_file": true,
   "udp_whitelist": [],
-  "websocket_token": null
+  "websocket_token": null,
+  "telegram_enabled": false,
+  "telegram_bot_token": "YOUR_BOT_TOKEN",
+  "telegram_chat_id": "YOUR_CHAT_ID"
 }
 ```
 
 - `write_to_file`: Enable or disable daily log file persistence.
 - `udp_whitelist`: Restrict UDP ingestion to specific IP addresses (empty list allows all sources).
 - `websocket_token`: Optional token required as `ws://host/ws?token=...`.
+- `telegram_enabled`: Enable or disable Telegram notifications.
+- `telegram_bot_token`: Telegram Bot API token (get from @BotFather).
+- `telegram_chat_id`: Telegram chat ID to send messages to.
 
 ## Running locally
 
@@ -186,6 +193,42 @@ Open your browser and navigate to:
 ```
 http://YOUR_SERVER_IP:8080
 ```
+
+---
+
+## 📱 Telegram Integration
+
+### Setup Telegram Bot
+
+1. **Create a bot with @BotFather**
+   - Open Telegram and search for `@BotFather`
+   - Send `/newbot` command
+   - Follow instructions to create your bot
+   - Copy the **Bot Token** (e.g., `123456789:ABCdefGHIjklMNOpqrsTUVwxyz`)
+
+2. **Get your Chat ID**
+   - Send a message to your bot
+   - Visit: `https://api.telegram.org/bot<YOUR_BOT_TOKEN>/getUpdates`
+   - Find `"chat":{"id":123456789}` in the response
+   - Copy the **Chat ID**
+
+3. **Configure the service**
+
+Edit `config.json`:
+```json
+{
+  "telegram_enabled": true,
+  "telegram_bot_token": "123456789:ABCdefGHIjklMNOpqrsTUVwxyz",
+  "telegram_chat_id": "123456789"
+}
+```
+
+4. **Restart the service**
+```bash
+docker compose restart
+```
+
+Now all UDP log messages will be forwarded to your Telegram chat in real-time!
 
 ---
 

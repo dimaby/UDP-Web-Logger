@@ -10,6 +10,7 @@ from fastapi.responses import FileResponse, JSONResponse
 
 from .config import AppConfig, get_config
 from .log_storage import LogStorage
+from .telegram_notifier import TelegramNotifier
 from .udp_listener import start_udp_server
 
 
@@ -18,10 +19,17 @@ CONFIG = get_config()
 
 async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     config = CONFIG
-    storage = LogStorage(config)
+    
+    # Initialize Telegram notifier
+    telegram_notifier = TelegramNotifier(config)
+    await telegram_notifier.start()
+    
+    # Initialize storage with Telegram notifier
+    storage = LogStorage(config, telegram_notifier)
 
     app.state.config = config
     app.state.storage = storage
+    app.state.telegram_notifier = telegram_notifier
 
     transport = await start_udp_server(config, storage)
 
@@ -37,6 +45,7 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
             with contextlib.suppress(asyncio.CancelledError):
                 await cleanup_task
         transport.close()
+        await telegram_notifier.stop()
         await storage.close()
         await asyncio.sleep(0)
 

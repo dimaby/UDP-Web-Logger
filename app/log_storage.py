@@ -5,9 +5,12 @@ from collections import deque
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Deque, Dict, List, Optional, TextIO
+from typing import TYPE_CHECKING, Deque, Dict, List, Optional, TextIO
 
 from .config import AppConfig
+
+if TYPE_CHECKING:
+    from .telegram_notifier import TelegramNotifier
 
 
 @dataclass
@@ -23,7 +26,7 @@ class LogEntry:
 
 
 class LogStorage:
-    def __init__(self, config: AppConfig):
+    def __init__(self, config: AppConfig, telegram_notifier: Optional[TelegramNotifier] = None):
         self._config = config
         self._buffer: Deque[LogEntry] = deque(maxlen=config.max_memory_logs)
         self._lock = asyncio.Lock()
@@ -32,6 +35,7 @@ class LogStorage:
         self._log_dir.mkdir(parents=True, exist_ok=True)
         self._current_log_file: Optional[Path] = None
         self._file_handle: Optional[TextIO] = None
+        self._telegram_notifier = telegram_notifier
 
     async def add_entry(self, message: str) -> LogEntry:
         entry = LogEntry(timestamp=datetime.now(timezone.utc), message=message.rstrip("\n"))
@@ -40,6 +44,13 @@ class LogStorage:
             await self._notify(entry)
             if self._config.write_to_file:
                 self._write_to_file(entry)
+        
+        # Send to Telegram if enabled
+        if self._telegram_notifier:
+            timestamp_str = entry.timestamp.strftime("%H:%M:%S")
+            telegram_message = f"<code>[{timestamp_str}]</code> {entry.message}"
+            await self._telegram_notifier.send_message(telegram_message)
+        
         return entry
 
     async def _notify(self, entry: LogEntry) -> None:
